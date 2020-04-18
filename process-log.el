@@ -1,20 +1,18 @@
-;;; process-log.el --- Keep a log of subprocesses. -*- lexical-binding: t -*-
+;;; process-log.el --- Log subprocess calls -*- lexical-binding: t -*-
 
 ;; Authors: Chris Rayner (dchrisrayner@gmail.com)
 ;; Created: May 23 2011
 ;; Keywords: processes, logging
 ;; URL: https://github.com/riscy/process-log
+;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Package-Requires: ((emacs "25"))
 ;; Version: 0
 
-;; This file is free software; you can redistribute or modify it under the terms
-;; of the GNU General Public License <https://www.gnu.org/licenses/>, version 3
-;; or any later version.  This software comes with with NO WARRANTY, not even
-;; the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
 ;;; Commentary:
 
-;; Keep a log of subprocesses.
+;; A minor mode to keep a log of processes invoked by Emacs and Emacs packages.
+;; This can be useful for benchmarking, debugging, auditing, or just for
+;; curiosity's sake. Note this may affect the performance of some packages.
 
 ;;; Code:
 
@@ -25,32 +23,90 @@
   :group 'processes
   :link '(url-link :tag "GitHub" "https://github.com/riscy/process-log"))
 
-(defcustom process-log-duplicates-p nil
-  "Whether to show calls we've already seen."
-  :type 'boolean)
-
-(defvar process-log--duplicates nil "MD5-hashed calls we've already seen.")
-(defvar process-log--trim        11 "Amount of call-stack to pre-trim.")
-(defvar process-log--call-stack  20 "Amount of call-stack to recall.")
-
 (defun process-log (func &rest args)
-  "Around advice for FUNC which takes ARGS."
-  (with-current-buffer (get-buffer-create "*process-log*")
-    (goto-char (point-max))
-    (let ((tmpstr ""))
-      (dotimes (ii process-log--call-stack)
-        (when-let ((bframe (cadr (backtrace-frame (+ ii process-log--trim)))))
-          (setq tmpstr (format "%s  ...from %S\n" tmpstr bframe))))
-      (when (or process-log-duplicates-p
-                (not (member (md5 tmpstr) process-log--duplicates)))
-        (insert (format "%S:\n%s\n" args tmpstr))
-        (unless process-log-duplicates-p
-          (add-to-list 'process-log--duplicates (md5 tmpstr))))))
+  "Advice around FUNC, which takes ARGS."
+  (let* ((blame (process-log--blame))
+         (text (process-log--cmd args)))
+    (with-current-buffer (get-buffer-create "*process-log*")
+      (or font-lock-mode (font-lock-mode 1))
+      (goto-char (point-max))
+      (insert
+       (concat (format-time-string "%Y-%m-%d %H:%M:%S ") blame " " text "\n"))))
   (apply func args))
 
-;; TODO: global minor mode
-(advice-add #'call-process :around #'process-log)
-(advice-add #'make-process :around #'process-log)
+(defun process-log--blame ()
+  "Get a string blaming which package probably invoked the process.
+It will be propertized with the backtrace that led to the call."
+  (let ((frames "") (offset 10) (blame nil))
+    (while (and (backtrace-frame offset)
+                (not (eq (cadr (backtrace-frame offset)) #'call-process))
+                (not (eq (cadr (backtrace-frame offset)) #'make-process)))
+      (setq offset (+ offset 1)))  ; frames starting here are relevant!
+    (dotimes (ii 20)  ; read the backtrace for another 20 frames or so
+      (when-let ((frame (cadr (backtrace-frame (+ offset 2 ii)))))
+        (setq frames (concat frames (process-log--frame-str frame)))
+        (unless blame
+          (setq blame
+                (cond
+                 ((eq frame 'dumb-jump-run-command)               "  dumb")
+                 ((eq frame 'eshell-external-command)             "eshell")
+                 ((eq frame 'flycheck-syntax-check-start)         "flychk")
+                 ((eq frame 'git-commit-setup-font-lock)          " magit")
+                 ((eq frame 'git-gutter:start-git-diff-process)   "gutter")
+                 ((eq frame 'git-gutter:in-repository-p)          "gutter")
+                 ((eq frame 'magit-diff-highlight)                " magit")
+                 ((eq frame 'magit-process-file)                  " magit")
+                 ((eq frame 'magit-refresh-buffer)                " magit")
+                 ((eq frame 'magit-start-process)                 " magit")
+                 ((eq frame 'shell)                               " shell")
+                 ((eq frame 'term)                                "  term")
+                 ((eq frame 'vc-call-backend)                     "    vc"))))))
+    (propertize (if blame
+                    (propertize blame 'font-lock-face 'font-lock-constant-face)
+                  (propertize "  misc" 'font-lock-face 'warning))
+                'help-echo frames)))
+
+(defun process-log--cmd (args)
+  "Return a string identifying the shell command in ARGS.
+ARGS is assumed to be the argument list from either
+`make-process' (which can take a set of keyword arguments) or
+`call-process' (which takes a normal list of arguments)."
+  (let (bin arglist)
+    (if-let ((command (plist-get args :command)))
+        (setq bin (car command) arglist (cdr command))
+      (setq bin (car args) arglist (cddddr args)))
+    (setq arglist (format "%s" (mapconcat #'identity arglist " ")))
+    (concat (propertize (file-name-base bin) 'help-echo bin) " " arglist)))
+
+(defun process-log--frame-str (frame)
+  "Return a string representation of FRAME.
+FRAME might be a function symbol, or something byte-compiled."
+  (cond ((eq frame #'apply) "")  ; uninteresting
+        ((eq frame #'progn) "")  ; uninteresting
+        ((symbolp frame) (format "%S\n" frame))
+        (t "#[compiled]\n")))
+
+(define-minor-mode process-log-mode
+  "Process log mode."
+  :global t
+  (if (not process-log-mode)
+      (process-log-unload-function)
+    (process-log--reset)
+    ;; NOTE start-process just calls make-process:
+    (advice-add #'make-process :around #'process-log)
+    (advice-add #'call-process :around #'process-log)
+    (pop-to-buffer "*process-log*")))
+
+(defun process-log-unload-function ()
+  "Pre-cleanup when `unload-feature' is called."
+  (advice-remove #'make-process #'process-log)
+  (advice-remove #'call-process #'process-log)
+  nil)
+
+(defun process-log--reset ()
+  "Reset the process log."
+  (interactive)
+  (with-current-buffer (get-buffer-create "*process-log*") (erase-buffer)))
 
 (provide 'process-log)
 ;;; process-log.el ends here
