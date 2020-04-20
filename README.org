@@ -1,0 +1,30 @@
+#+TITLE: process-log
+#+OPTIONS: toc:3 author:t creator:nil num:nil
+#+AUTHOR: Chris Rayner
+#+EMAIL: dchrisrayner@gmail.com
+
+A minor mode to keep a log of processes invoked by Emacs and Emacs packages.
+This can be useful for benchmarking, debugging, auditing, or just for
+curiosity's sake. Note this may affect the performance of some packages.
+
+To use process-log, add the following to your =.emacs=:
+#+begin_src elisp
+  (add-to-list 'load-path "~/path/to/process-log/")
+  (require 'process-log)
+  (process-log-mode 1)    ; start logging
+#+end_src
+
+This creates a buffer called =*process-log*=, which resembles the following:
+#+begin_src change-log
+2020-04-19 18:50:22 gutter git --no-pager -c diff.autore...
+2020-04-19 18:50:25     vc git status --porcelain -z --u...
+2020-04-19 18:50:25 flychk Emacs -Q --batch --eval (prog...
+2020-04-19 18:51:57  magit git --no-pager --literal-path...
+2020-04-19 18:56:24   misc open https://learning.oreilly...
+#+end_src
+where each row is comprised of:
+- a timestamp
+- the "blame" token indicating which package invoked the process;
+  the =help-echo= (mouseover) shows 20 relevant backtrace frames
+- the binary, whose full path is shown in its =help-echo=
+- the binary's full argument list
