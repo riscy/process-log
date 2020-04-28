@@ -5,7 +5,7 @@
 ;; Keywords: processes, logging
 ;; URL: https://github.com/riscy/process-log
 ;; SPDX-License-Identifier: GPL-3.0-or-later
-;; Package-Requires: ((emacs "25"))
+;; Package-Requires: ((emacs "25.1"))
 ;; Version: 0
 
 ;;; Commentary:
@@ -87,6 +87,7 @@ FRAME might be a function symbol, or something byte-compiled."
         ((symbolp frame) (format "%S\n" frame))
         (t "#[compiled]\n")))
 
+;;;###autoload
 (define-minor-mode process-log-mode
   "Process log mode."
   :global t
@@ -96,7 +97,7 @@ FRAME might be a function symbol, or something byte-compiled."
     ;; NOTE start-process just calls make-process:
     (advice-add #'make-process :around #'process-log)
     (advice-add #'call-process :around #'process-log)
-    (message "Logging processes to %s" process-log-buffer))
+    (message "Logging processes to %s" process-log-buffer)))
 
 (defun process-log-unload-function ()
   "Pre-cleanup when `unload-feature' is called."
