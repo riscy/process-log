@@ -22,12 +22,13 @@
   :prefix "process-log"
   :group 'processes
   :link '(url-link :tag "GitHub" "https://github.com/riscy/process-log"))
+(defvar process-log-buffer "*process-log*")
 
 (defun process-log (func &rest args)
   "Advice around FUNC, which takes ARGS."
   (let* ((blame (process-log--blame))
          (text (process-log--cmd args)))
-    (with-current-buffer (get-buffer-create "*process-log*")
+    (with-current-buffer (get-buffer-create process-log-buffer)
       (or font-lock-mode (font-lock-mode 1))
       (goto-char (point-max))
       (insert
@@ -95,7 +96,7 @@ FRAME might be a function symbol, or something byte-compiled."
     ;; NOTE start-process just calls make-process:
     (advice-add #'make-process :around #'process-log)
     (advice-add #'call-process :around #'process-log)
-    (pop-to-buffer "*process-log*")))
+    (message "Logging processes to %s" process-log-buffer))
 
 (defun process-log-unload-function ()
   "Pre-cleanup when `unload-feature' is called."
@@ -105,8 +106,7 @@ FRAME might be a function symbol, or something byte-compiled."
 
 (defun process-log--reset ()
   "Reset the process log."
-  (interactive)
-  (with-current-buffer (get-buffer-create "*process-log*") (erase-buffer)))
+  (with-current-buffer (get-buffer-create process-log-buffer) (erase-buffer)))
 
 (provide 'process-log)
 ;;; process-log.el ends here
