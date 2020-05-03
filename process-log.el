@@ -31,8 +31,8 @@
     (with-current-buffer (get-buffer-create process-log-buffer)
       (or font-lock-mode (font-lock-mode 1))
       (goto-char (point-max))
-      (insert
-       (concat (format-time-string "%Y-%m-%d %H:%M:%S ") blame " " text "\n"))))
+      (insert (concat (format-time-string "%Y-%m-%d %H:%M:%S") "\t"
+                      blame "\t" text "\n"))))
   (apply func args))
 
 (defun process-log--blame ()
