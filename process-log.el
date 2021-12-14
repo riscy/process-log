@@ -45,8 +45,8 @@ It will be propertized with the backtrace that led to the call."
             (not (eq (cadr (backtrace-frame offset)) #'call-process))
             (not (eq (cadr (backtrace-frame offset)) #'make-process)))
       (setq offset (+ offset 1)))  ; frames starting here are relevant!
-    (dotimes (ii 20)  ; read the backtrace for another 20 frames or so
-      (when-let ((frame (cadr (backtrace-frame (+ offset 2 ii)))))
+    (dotimes (backtrace-depth 25)
+      (when-let ((frame (cadr (backtrace-frame (+ offset 2 backtrace-depth)))))
         (setq frames (concat frames (process-log--frame-str frame)))
         (unless blame
           (setq blame
@@ -58,6 +58,7 @@ It will be propertized with the backtrace that led to the call."
                  ((eq frame 'git-gutter:start-git-diff-process) "git-gutter") ; nofmt
                  ((eq frame 'git-gutter:in-repository-p)        "git-gutter") ; nofmt
                  ((eq frame 'magit-diff-highlight)              "     magit") ; nofmt
+                 ((eq frame 'magit-diff-update-hunk-refinement) "     magit") ; nofmt
                  ((eq frame 'magit-process-file)                "     magit") ; nofmt
                  ((eq frame 'magit-refresh-buffer)              "     magit") ; nofmt
                  ((eq frame 'magit-start-process)               "     magit") ; nofmt
@@ -88,10 +89,18 @@ ARGS is assumed to be the argument list from either
 (defun process-log--frame-str (frame)
   "Return a string representation of FRAME.
 FRAME might be a function symbol, or something byte-compiled."
-  (cond ((eq frame #'apply) "")  ; uninteresting
-        ((eq frame #'progn) "")  ; uninteresting
-        ((symbolp frame) (format "%S\n" frame))
-        (t "#[compiled]\n")))
+  (cond
+   ((eq frame #'apply) "") ; uninteresting
+   ((eq frame #'cond) "") ; uninteresting
+   ((eq frame #'if) "") ; uninteresting
+   ((eq frame #'if*) "") ; uninteresting
+   ((eq frame #'let) "") ; uninteresting
+   ((eq frame #'let*) "") ; uninteresting
+   ((eq frame #'progn) "") ; uninteresting
+   ((eq frame #'save-excursion) "") ; uninteresting
+   ((symbolp frame)
+    (format "%S\n" frame))
+   (t "#[compiled]\n")))
 
 ;;;###autoload
 (define-minor-mode process-log-mode
