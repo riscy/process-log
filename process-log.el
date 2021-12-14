@@ -12,7 +12,7 @@
 
 ;; A minor mode to keep a log of processes invoked by Emacs and Emacs packages.
 ;; This can be useful for benchmarking, debugging, auditing, or just for
-;; curiosity's sake. Note this may affect the performance of some packages.
+;; curiosity's sake.  Note this may affect the performance of some packages.
 
 ;;; Code:
 
@@ -31,17 +31,19 @@
     (with-current-buffer (get-buffer-create process-log-buffer)
       (or font-lock-mode (font-lock-mode 1))
       (goto-char (point-max))
-      (insert (concat (format-time-string "%Y-%m-%d %H:%M:%S") "\t"
-                      blame "\t" text "\n"))))
+      (insert (format-time-string "%Y-%m-%d %H:%M:%S") "\t" blame "\t" text "\n")))
   (apply func args))
 
 (defun process-log--blame ()
   "Get a string blaming which package probably invoked the process.
 It will be propertized with the backtrace that led to the call."
-  (let ((frames "") (offset 10) (blame nil))
-    (while (and (backtrace-frame offset)
-                (not (eq (cadr (backtrace-frame offset)) #'call-process))
-                (not (eq (cadr (backtrace-frame offset)) #'make-process)))
+  (let ((frames "")
+        (offset 10)
+        (blame nil))
+    (while (and
+            (backtrace-frame offset)
+            (not (eq (cadr (backtrace-frame offset)) #'call-process))
+            (not (eq (cadr (backtrace-frame offset)) #'make-process)))
       (setq offset (+ offset 1)))  ; frames starting here are relevant!
     (dotimes (ii 20)  ; read the backtrace for another 20 frames or so
       (when-let ((frame (cadr (backtrace-frame (+ offset 2 ii)))))
@@ -49,23 +51,27 @@ It will be propertized with the backtrace that led to the call."
         (unless blame
           (setq blame
                 (cond
-                 ((eq frame 'dumb-jump-run-command)               "  dumb")
-                 ((eq frame 'eshell-external-command)             "eshell")
-                 ((eq frame 'flycheck-syntax-check-start)         "flychk")
-                 ((eq frame 'git-commit-setup-font-lock)          " magit")
-                 ((eq frame 'git-gutter:start-git-diff-process)   "gutter")
-                 ((eq frame 'git-gutter:in-repository-p)          "gutter")
-                 ((eq frame 'magit-diff-highlight)                " magit")
-                 ((eq frame 'magit-process-file)                  " magit")
-                 ((eq frame 'magit-refresh-buffer)                " magit")
-                 ((eq frame 'magit-start-process)                 " magit")
-                 ((eq frame 'shell)                               " shell")
-                 ((eq frame 'term)                                "  term")
-                 ((eq frame 'vc-call-backend)                     "    vc"))))))
-    (propertize (if blame
-                    (propertize blame 'font-lock-face 'font-lock-constant-face)
-                  (propertize "  misc" 'font-lock-face 'warning))
-                'help-echo frames)))
+                 ((eq frame 'dumb-jump-run-command)             " dumb-jump") ; nofmt
+                 ((eq frame 'eshell-external-command)           "    eshell") ; nofmt
+                 ((eq frame 'flycheck-syntax-check-start)       "  flycheck") ; nofmt
+                 ((eq frame 'git-commit-setup-font-lock)        "     magit") ; nofmt
+                 ((eq frame 'git-gutter:start-git-diff-process) "git-gutter") ; nofmt
+                 ((eq frame 'git-gutter:in-repository-p)        "git-gutter") ; nofmt
+                 ((eq frame 'magit-diff-highlight)              "     magit") ; nofmt
+                 ((eq frame 'magit-process-file)                "     magit") ; nofmt
+                 ((eq frame 'magit-refresh-buffer)              "     magit") ; nofmt
+                 ((eq frame 'magit-start-process)               "     magit") ; nofmt
+                 ((eq frame 'shell)                             "     shell") ; nofmt
+                 ((eq frame 'term)                              "      term") ; nofmt
+                 ((eq frame 'vc-call-backend)                   "        vc") ; nofmt
+                 )))))
+    (propertize
+     (if blame
+         (propertize blame 'font-lock-face 'font-lock-constant-face)
+       (propertize "   unknown" 'font-lock-face 'warning))
+     ;; NOTE: newlines turn into ", "  help-echo appears in minibuffer
+     'help-echo
+     (string-trim-right frames))))
 
 (defun process-log--cmd (args)
   "Return a string identifying the shell command in ARGS.
